@@ -1,20 +1,22 @@
 package org.deri.eurostat.elements;
 
+import java.util.HashMap;
+
 public class Code {
 
 	protected String value;
-	protected String description;
+	protected HashMap<String, String> hshDescription;
 	
 	public Code()
 	{
 		this.value = null;
-		this.description = null;
+		this.hshDescription = null;
 	}
 	
-	public Code(String value, String description)
+	public Code(String value, HashMap<String,String> hshDescription)
 	{
 		this.value = value;
-		this.description = description;
+		this.hshDescription = hshDescription;
 	}
 
 	public String getValue() {
@@ -25,13 +27,14 @@ public class Code {
 		this.value = value;
 	}
 
-	public String getDescription() {
-		return description;
-	}
-
-	public void setDescription(String description) {
-		this.description = description;
+	public HashMap<String,String> gethshDescription()
+	{
+		return hshDescription;
 	}
 	
+	public void setName(HashMap<String,String> hshDescription)
+	{
+		this.hshDescription = hshDescription;
+	}
 	
 }

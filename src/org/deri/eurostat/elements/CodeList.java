@@ -1,13 +1,14 @@
 package org.deri.eurostat.elements;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 
 public class CodeList {
 
 	protected String id;
 	protected String agencyID;
 	protected String isFinal;
-	protected String name;
+	protected HashMap<String, String> hshName;
 	protected ArrayList<Code> lstCodes;
 	
 	public CodeList()
@@ -15,16 +16,16 @@ public class CodeList {
 		this.id = null;
 		this.agencyID = null;
 		this.isFinal = null;
-		this.name = null;
+		this.hshName = null;
 		this.lstCodes = new ArrayList<Code>();
 	}
 	
-	public CodeList(String id, String agencyID, String isFinal, String name, ArrayList<Code> lstCode)
+	public CodeList(String id, String agencyID, String isFinal, HashMap<String,String> hshName, ArrayList<Code> lstCode)
 	{
 		this.id = id;
 		this.agencyID = agencyID;
 		this.isFinal = isFinal;
-		this.name = name;
+		this.hshName = hshName;
 		this.lstCodes = lstCode;
 	}
 	
@@ -52,12 +53,14 @@ public class CodeList {
 		this.isFinal = isFinal;
 	}
 	
-	public String getName() {
-		return name;
+	public HashMap<String,String> gethshName()
+	{
+		return hshName;
 	}
 	
-	public void setName(String name) {
-		this.name = name;
+	public void setName(HashMap<String,String> hshName)
+	{
+		this.hshName = hshName;
 	}
 	
 	public ArrayList<Code> getCode() {

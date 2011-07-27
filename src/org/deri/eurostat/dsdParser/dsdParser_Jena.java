@@ -1,8 +1,10 @@
 package org.deri.eurostat.dsdParser;
 
 import java.io.BufferedWriter;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -14,25 +16,36 @@ import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathFactory;
 
 import org.deri.eurostat.DataModel.DataStoreModel;
-import org.deri.eurostat.elements.*;
+import org.deri.eurostat.elements.Attribute;
+import org.deri.eurostat.elements.Code;
+import org.deri.eurostat.elements.CodeList;
+import org.deri.eurostat.elements.Concept;
+import org.deri.eurostat.elements.Dimension;
+import org.deri.eurostat.elements.Measure;
+
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
+import com.hp.hpl.jena.rdf.model.Model;
+import com.hp.hpl.jena.rdf.model.ModelFactory;
+import com.hp.hpl.jena.rdf.model.Property;
+import com.hp.hpl.jena.rdf.model.Resource;
+
+
 /*
- * Todo : should we use sdmx-concept instead of concept where code lists are from SDMX agency ? Because the codelists
- * which are from SDMX dont have their concepts defined in the Concept heirarchy.
- * How we identify the rdfs:range for those components who has no associated codelist ? e.g. how we decide to  
- * associate 'xsd:date' or 'xsd:double' to a component named TIME_PERIOD . If there are only few components then can 
- * we hard-code their rdfs:range in the program ?
+ * Slovenia in french language is being written in different characters than represented in the DSD XML file. Check
+ * Multi-Language issue in jena
+ *  
  */
-public class dsdParser {
+public class dsdParser_Jena {
 
     private Document xmlDocument;
     private XPath xPath;	
     private static String xmlFilePath = "E:/EU Projects/EuroStat/tsieb010.sdmx/tsieb010.dsd.xml";
     private static String outputFilePath = "E:/EU Projects/EuroStat/datacube mapping/RDF/";
+    private static String serialization = "RDF/XML";
     ArrayList<Code> lstCode = new ArrayList<Code>();
     ArrayList<Concept> lstConcepts = new ArrayList<Concept>();
     ArrayList<CodeList> lstCodeLists = new ArrayList<CodeList>();
@@ -40,8 +53,8 @@ public class dsdParser {
     ArrayList<Dimension> lstTimeDimensions = new ArrayList<Dimension>();
     ArrayList<Attribute> lstAttributes = new ArrayList<Attribute>();
     ArrayList<Measure> lstMeasures = new ArrayList<Measure>();
-    static BufferedWriter write = null;
-	static FileWriter fstream = null;
+    //static BufferedWriter write = null;
+	//static FileWriter fstream = null;
 	String fileName = "";
 	String codeListURL = "http://example.org/EuroStat/";
 	static DataStoreModel dsModel;
@@ -52,7 +65,6 @@ public class dsdParser {
 		dsModel = new DataStoreModel();
 		dsModel.addRDFtoDataModel("sdmx-code/sdmx-code.ttl", baseURI, "TURTLE");
 		return dsModel.returnCodeListURI(codeList);
-		
 	}
 	
     private void initObjects(){        
@@ -119,7 +131,7 @@ public class dsdParser {
 			}
 		}
 		
-		writeDatatoFile();
+		produceRDF();
 	}
 
 	public void getConcepts(Element element)
@@ -347,51 +359,30 @@ public class dsdParser {
 		
 	}
 	
-	
-	public void writeDatatoFile()
+	public void produceRDF()
 	{
-		String codeListID = "";
-		int counter = 1;
-		String name;
-		HashMap<String, String> hshName = new HashMap<String, String>();
+		//Model model = ModelFactory.createDefaultModel();
 		
-		createRDFFile(fileName);
+		Model model = ParserUtil.getModelProperties();
+		Model codelist_Model = ModelFactory.createDefaultModel();
 		
-		writeLinetoFile("@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .");
-		writeLinetoFile("@prefix skos: <http://www.w3.org/2004/02/skos#> .");
-		writeLinetoFile("@prefix qb: <http://purl.org/linked-data/cube#> .");
-		writeLinetoFile("@prefix sdmx: <http://purl.org/linked-data/sdmx#> .");
-		writeLinetoFile("@prefix sdmx-concept: <http://purl.org/linked-data/sdmx/2009/concept#> .");
-		writeLinetoFile("@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .");
-		writeLinetoFile("@prefix sdmx-code: <http://purl.org/linked-data/sdmx/2009/code#> .");
-		writeLinetoFile("@prefix concept: <http://example.org/EuroStat/concept#> .");
-		writeLinetoFile("@prefix property: <http://example.org/EuroStat/property#> .");
-		writeLinetoFile("@prefix cl: <http://example.org/EuroStat/CodeList/> .");
+		Resource root = model.createResource( codeListURL + "dsd/" + fileName.substring(0,fileName.indexOf("_")) );
 		
-		// define DataStructureDefinition based on the components identified in the 'KeyFamilies' tag of DSD
-		writeLinetoFile("<" + codeListURL + "dsd/" + fileName.substring(0,fileName.indexOf("_")) + ">	a qb:DataStrucutreDefinition;");
-		writeLinetoFile("		skos:notation \"" + fileName + "\";");
 		
-		for(Dimension dim:lstDimensions)
-			writeLinetoFile("		qb:component [qb:dimension	property:" + dim.getConceptRef() + "	qb:order " + counter++ + "];");
+		model.add(root,ParserUtil.type,ParserUtil.dsd).add(root,ParserUtil.notation,fileName);
 		
-		for(Dimension dim:lstTimeDimensions)
-			writeLinetoFile("		qb:component [qb:dimension	property:" + dim.getConceptRef() + "	qb:order " + counter++ + "];");
-		
-		for(Measure measure:lstMeasures)
-			writeLinetoFile("		qb:component [qb:measure	property:" + measure.getConceptRef() + "];");
-		
-		for(Attribute att:lstAttributes)
-			writeLinetoFile("		qb:component [qb:attribute	property:" + att.getConceptRef() + "];");
-		
-		// there is an extra ; before '.'. Fix this issue
-		writeLinetoFile("		.");
-		
+		//
 		for(Dimension dim:lstDimensions)
 		{
-			writeLinetoFile("property:" + dim.getConceptRef() + " a qb:DimensionProperty, qb:CodedProperty;");
-			writeLinetoFile("		rdfs:domain		qb:Observation;");
-			writeLinetoFile("		qb:concept		concept:" + dim.getConceptRef() + ";");
+			Resource component_1 = model.createResource();
+			model.add(root,ParserUtil.component,component_1);
+			Property prop = model.createProperty(ParserUtil.property + dim.getConceptRef());
+			model.add(component_1,ParserUtil.dimension,prop);
+			model.add(prop,ParserUtil.type,ParserUtil.dimensionProperty);
+			model.add(prop,ParserUtil.type,ParserUtil.codedProperty);
+			model.add(prop,ParserUtil.rdfsDomain,ParserUtil.observation);
+			Property cncpt = model.createProperty(ParserUtil.concepts + dim.getConceptRef());
+			model.add(prop,ParserUtil.concept,cncpt);
 			
 			if(!dim.getCodeList().equals(""))
 			{
@@ -403,46 +394,37 @@ public class dsdParser {
 						{
 							// re-use the URI from sdmx-code.ttl file
 							String codeList = getCodeList(obj.getId());
-							writeLinetoFile("		qb:codeList		sdmx-code:" + codeList + ";");
-							writeLinetoFile("		rdfs:range		sdmx-code:" + codeList);
+							Property cList = model.createProperty(ParserUtil.sdmx_code + codeList);
+							model.add(prop,ParserUtil.codeList,cList);
+							model.add(prop,ParserUtil.rdfsRange,cList);
 						}
 						else
 						{
-							writeLinetoFile("		qb:codeList		cl:" + obj.getId().substring(obj.getId().indexOf("_")+1) + ";");
-							writeLinetoFile("		rdfs:range		cl:" + obj.getId().substring(obj.getId().indexOf("_")+1));
+							Property cList = model.createProperty(ParserUtil.cl + obj.getId().substring(obj.getId().indexOf("_")+1));
+							model.add(prop,ParserUtil.codeList,cList);
+							model.add(prop,ParserUtil.rdfsRange,cList);
 						}
 					}
 				}
 			}
 			else
-				writeLinetoFile("		rdfs:range		xsd:" + dim.getDataType().toLowerCase());
-//			for(CodeList obj:lstCodeLists)
-//			{
-//				if(obj.getId().toString().equals(dim.getCodeList().toString()))
-//				{
-//					if(obj.getAgencyID().equals("SDMX"))
-//					{
-//						// re-use the URI from sdmx-code.ttl file
-//						String codeList = getCodeList(obj.getId());
-//						writeLinetoFile("		qb:codeList		sdmx-code:" + codeList + ";");
-//						writeLinetoFile("		rdfs:range		sdmx-code:" + codeList);
-//					}
-//					else
-//					{
-//						writeLinetoFile("		qb:codeList		cl:" + obj.getId().substring(obj.getId().indexOf("_")+1) + ";");
-//						writeLinetoFile("		rdfs:range		cl:" + obj.getId().substring(obj.getId().indexOf("_")+1));
-//					}
-//				}
-//			}
-			writeLinetoFile("		.");
+			{
+				Property type = model.createProperty(ParserUtil.xsd + dim.getDataType().toLowerCase());
+				model.add(prop,ParserUtil.rdfsRange,type);
+			}
 		}
 		
+		//
 		for(Dimension dim:lstTimeDimensions)
 		{
-			writeLinetoFile("property:" + dim.getConceptRef() + " a qb:DimensionProperty;");
-			writeLinetoFile("		rdfs:domain		qb:Observation;");
-			writeLinetoFile("		qb:concept		concept:" + dim.getConceptRef() + ";");
-			// TODO : define rdfs:range of type xsd:date
+			Resource component_1 = model.createResource();
+			model.add(root,ParserUtil.component,component_1);
+			Property prop = model.createProperty(ParserUtil.property + dim.getConceptRef());
+			model.add(component_1,ParserUtil.dimension,prop);
+			model.add(prop,ParserUtil.type,ParserUtil.dimensionProperty);
+			model.add(prop,ParserUtil.rdfsDomain,ParserUtil.observation);
+			Property cncpt = model.createProperty(ParserUtil.concepts + dim.getConceptRef());
+			model.add(prop,ParserUtil.concept,cncpt);
 			
 			if(!dim.getCodeList().equals(""))
 			{
@@ -452,31 +434,39 @@ public class dsdParser {
 					{
 						if(obj.getAgencyID().equals("SDMX"))
 						{
-							// re-use the URI from sdmx-code.ttl file
 							String codeList = getCodeList(obj.getId());
-							writeLinetoFile("		qb:codeList		sdmx-code:" + codeList + ";");
-							writeLinetoFile("		rdfs:range		sdmx-code:" + codeList);
+							Property cList = model.createProperty(ParserUtil.sdmx_code + codeList);
+							model.add(prop,ParserUtil.codeList,cList);
+							model.add(prop,ParserUtil.rdfsRange,cList);
 						}
 						else
 						{
-							writeLinetoFile("		qb:codeList		cl:" + obj.getId().substring(obj.getId().indexOf("_")+1) + ";");
-							writeLinetoFile("		rdfs:range		cl:" + obj.getId().substring(obj.getId().indexOf("_")+1));
+							Property cList = model.createProperty(ParserUtil.cl + obj.getId().substring(obj.getId().indexOf("_")+1));
+							model.add(prop,ParserUtil.codeList,cList);
+							model.add(prop,ParserUtil.rdfsRange,cList);
 						}
 					}
 				}
 			}
 			else
-				writeLinetoFile("		rdfs:range		xsd:" + dim.getDataType().toLowerCase());
-			
-			writeLinetoFile("		.");
+			{
+				Property type = model.createProperty(ParserUtil.xsd + dim.getDataType().toLowerCase());
+				model.add(prop,ParserUtil.rdfsRange,type);
+			}
 		}
 		
+		//
 		for(Measure measure:lstMeasures)
 		{
-			writeLinetoFile("property:" + measure.getConceptRef() + " a qb:MeasureProperty, qb:CodedProperty;");
-			writeLinetoFile("		rdfs:domain		qb:Observation;");
-			writeLinetoFile("		qb:concept		concept:" + measure.getConceptRef() + ";");
-			// TODO : define rdfs:range of the datatype used
+			Resource component_1 = model.createResource();
+			model.add(root,ParserUtil.component,component_1);
+			Property prop = model.createProperty(ParserUtil.property + measure.getConceptRef());
+			model.add(component_1,ParserUtil.measure,prop);
+			model.add(prop,ParserUtil.type,ParserUtil.measureProperty);
+			model.add(prop,ParserUtil.type,ParserUtil.codedProperty);
+			model.add(prop,ParserUtil.rdfsDomain,ParserUtil.observation);
+			Property cncpt = model.createProperty(ParserUtil.concepts + measure.getConceptRef());
+			model.add(prop,ParserUtil.concept,cncpt);
 			
 			if(!measure.getCodeList().equals(""))
 			{
@@ -486,83 +476,82 @@ public class dsdParser {
 					{
 						if(obj.getAgencyID().equals("SDMX"))
 						{
-							// re-use the URI from sdmx-code.ttl file
 							String codeList = getCodeList(obj.getId());
-							writeLinetoFile("		qb:codeList		sdmx-code:" + codeList + ";");
-							writeLinetoFile("		rdfs:range		sdmx-code:" + codeList);
+							Property cList = model.createProperty(ParserUtil.sdmx_code + codeList);
+							model.add(prop,ParserUtil.codeList,cList);
+							model.add(prop,ParserUtil.rdfsRange,cList);
 						}
 						else
 						{
-							writeLinetoFile("		qb:codeList		cl:" + obj.getId().substring(obj.getId().indexOf("_")+1) + ";");
-							writeLinetoFile("		rdfs:range		cl:" + obj.getId().substring(obj.getId().indexOf("_")+1));
+							Property cList = model.createProperty(ParserUtil.cl + obj.getId().substring(obj.getId().indexOf("_")+1));
+							model.add(prop,ParserUtil.codeList,cList);
+							model.add(prop,ParserUtil.rdfsRange,cList);
 						}
 					}
 				}
 			}
 			else
-				writeLinetoFile("		rdfs:range		xsd:" + measure.getDataType().toLowerCase());
-			
-			writeLinetoFile("		.");
+			{
+				Property type = model.createProperty(ParserUtil.xsd + measure.getDataType().toLowerCase());
+				model.add(prop,ParserUtil.rdfsRange,type);
+			}
 		}
 		
+		// 
 		for(Attribute att:lstAttributes)
 		{
-			writeLinetoFile("property:" + att.getConceptRef() + " a qb:AttributeProperty, qb:CodedProperty;");
-			writeLinetoFile("		rdfs:domain		qb:Observation;");
-			writeLinetoFile("		qb:concept		concept:" + att.getConceptRef() + ";");
+			Resource component_1 = model.createResource();
+			model.add(root,ParserUtil.component,component_1);
+			Property prop = model.createProperty(ParserUtil.property + att.getConceptRef());
+			model.add(component_1,ParserUtil.attribute,prop);
+			model.add(prop,ParserUtil.type,ParserUtil.attributeProperty);
+			model.add(prop,ParserUtil.type,ParserUtil.codedProperty);
+			model.add(prop,ParserUtil.rdfsDomain,ParserUtil.observation);
+			Property cncpt = model.createProperty(ParserUtil.concepts + att.getConceptRef());
+			model.add(prop,ParserUtil.concept,cncpt);
 			
-			if(!att.getCodeList().equals(""))
+			for(CodeList obj:lstCodeLists)
 			{
-				for(CodeList obj:lstCodeLists)
+				if(obj.getId().toString().equals(att.getCodeList().toString()))
 				{
-					if(obj.getId().toString().equals(att.getCodeList().toString()))
+					if(obj.getAgencyID().equals("SDMX"))
 					{
-						if(obj.getAgencyID().equals("SDMX"))
-						{
-							// re-use the URI from sdmx-code.ttl file
-							String codeList = getCodeList(obj.getId());
-							writeLinetoFile("		qb:codeList		sdmx-code:" + codeList + ";");
-							writeLinetoFile("		rdfs:range		sdmx-code:" + codeList);
-						}
-						else
-						{
-							writeLinetoFile("		qb:codeList		cl:" + obj.getId().substring(obj.getId().indexOf("_")+1) + ";");
-							writeLinetoFile("		rdfs:range		cl:" + obj.getId().substring(obj.getId().indexOf("_")+1));
-						}
+						// re-use the URI from sdmx-code.ttl file
+						String codeList = getCodeList(obj.getId());
+						Property cList = model.createProperty(ParserUtil.sdmx_code + codeList);
+						model.add(prop,ParserUtil.codeList,cList);
+						model.add(prop,ParserUtil.rdfsRange,cList);
+					}
+					else
+					{
+						Property cList = model.createProperty(ParserUtil.cl + obj.getId().substring(obj.getId().indexOf("_")+1));
+						model.add(prop,ParserUtil.codeList,cList);
+						model.add(prop,ParserUtil.rdfsRange,cList);
 					}
 				}
 			}
-			else
-				writeLinetoFile("		rdfs:range		xsd:" + att.getDataType().toLowerCase());
-//			for(CodeList obj:lstCodeLists)
-//			{
-//				if(obj.getId().toString().equals(att.getCodeList().toString()))
-//				{
-//					if(obj.getAgencyID().equals("SDMX"))
-//					{
-//						// re-use the URI from sdmx-code.ttl file
-//						String codeList = getCodeList(obj.getId());
-//						writeLinetoFile("		qb:codeList		sdmx-code:" + codeList + ";");
-//						writeLinetoFile("		rdfs:range		sdmx-code:" + codeList);
-//					}
-//					else
-//					{
-//						writeLinetoFile("		qb:codeList		cl:" + obj.getId().substring(obj.getId().indexOf("_")+1) + ";");
-//						writeLinetoFile("		rdfs:range		cl:" + obj.getId().substring(obj.getId().indexOf("_")+1));
-//					}
-//				}
-//			}
-			writeLinetoFile("		.");
 		}
+
+		// translates code lists
+		String codeListID = "";
+		String name;
+		HashMap<String, String> hshName = new HashMap<String, String>();
 		
-		// translate all codelists from DSD which are defined by agencies other than SDMX.
 		for(CodeList obj:lstCodeLists)
 		{
-			
 			if(!obj.getAgencyID().equals("SDMX"))
 			{
+				codelist_Model = ParserUtil.getModelProperties();
+				
 				codeListID = obj.getId().substring(obj.getId().indexOf("_")+1);
-				writeLinetoFile("<" + codeListURL + "CodeList/" + codeListID + ">	a skos:ConceptScheme;");
+				Resource codeLists = model.createResource(codeListURL + "CodeList/" + codeListID);
+				Resource codelist_Lists = codelist_Model.createResource(codeListURL + "CodeList/" + codeListID);
+				
+				model.add(codeLists,ParserUtil.type,ParserUtil.conceptScheme);
+				codelist_Model.add(codelist_Lists,ParserUtil.type,ParserUtil.conceptScheme);
+				
+				model.add(codeLists,ParserUtil.notation,obj.getId());
+				codelist_Model.add(codelist_Lists,ParserUtil.notation,obj.getId());
 				
 				// print multilingual labels
 				hshName = obj.gethshName();
@@ -572,23 +561,23 @@ public class dsdParser {
 					Map.Entry entry = (Map.Entry) entrySetIterator.next();
 		            String key = (String) entry.getKey();
 		            name = hshName.get(key);
-		            writeLinetoFile("		rdfs:label \"" + name + "\"@" + key + ";");
+		            model.add(codeLists,ParserUtil.rdfsLabel,model.createLiteral(name,key));
+		            codelist_Model.add(codelist_Lists,ParserUtil.rdfsLabel,model.createLiteral(name,key));
 				}
-				//writeLinetoFile("		rdfs:label \"" + obj.getName() + "\"@en;");
-				
-				writeLinetoFile("		skos:notation \"" + obj.getId() + "\";");
 				
 				ArrayList<Code> arrCode = obj.getCode();
 				for(Code code:arrCode)
 				{
-					writeLinetoFile("		skos:hasTopConcept <" + codeListURL + "CodeList/" + codeListID + "#" + code.getValue() + ">;");
-				}
-				// there is an extra ; before '.'. Fix this issue
-				writeLinetoFile("		.");
-				
-				for(Code code:arrCode)
-				{
-					writeLinetoFile("<" + codeListURL + "CodeList/" + codeListID + "#" + code.getValue() + ">	a skos:Concept;");
+					//writeLinetoFile("		skos:hasTopConcept <" + codeListURL + "CodeList/" + codeListID + "#" + code.getValue() + ">;");
+					String str = codeListURL + "CodeList/" + codeListID + "#" + code.getValue();
+					Resource res = model.createResource(str);
+					Resource codelist_res = codelist_Model.createResource(str);
+					
+					model.add(codeLists,ParserUtil.topConcept,res);
+					codelist_Model.add(codelist_Lists,ParserUtil.topConcept,codelist_res);
+					
+					model.add(res,ParserUtil.type,ParserUtil.skosConcept);
+					codelist_Model.add(codelist_res,ParserUtil.type,ParserUtil.skosConcept);
 					
 					// print multilingual labels
 					hshName = code.gethshDescription();
@@ -598,24 +587,31 @@ public class dsdParser {
 						Map.Entry entry = (Map.Entry) entryIterator.next();
 			            String key = (String) entry.getKey();
 			            name = hshName.get(key);
-			            writeLinetoFile("		skos:prefLabel \"" + name + "\"@" + key + ";");
+			            
+			            model.add(res,ParserUtil.skosLabel, model.createLiteral(name,key));
+			            codelist_Model.add(codelist_res,ParserUtil.skosLabel, model.createLiteral(name,key));
 					}
-					//writeLinetoFile("		skos:prefLabel \"" + code.getDescription() + "\"@en;");
 					
-					writeLinetoFile("		skos:inScheme <" + codeListURL + "CodeList/" + codeListID + ">;");
-					writeLinetoFile("		skos:notation \"" + code.getValue() + "\"");
-					writeLinetoFile("		.");
+					str = str.substring(0,str.indexOf("#"));
+					Resource resource = model.createResource(str);
+					Resource codelist_resource = codelist_Model.createResource(str);
+					
+					model.add(res,ParserUtil.skosScheme,resource);
+					codelist_Model.add(codelist_res,ParserUtil.skosScheme,codelist_resource);
+					
+					model.add(res,ParserUtil.notation,code.getValue());
+					codelist_Model.add(codelist_res,ParserUtil.notation,code.getValue());
 				}
-
+				
+				codelist_Model.write(System.out,serialization);
 			}
 		}
 
-		// translates concepts from DSD
 		for(Concept concept:lstConcepts)
 		{
-			writeLinetoFile("<" + codeListURL + "concept#" + concept.getId() + ">	a sdmx:Concept;");
-			writeLinetoFile("		skos:inScheme <" + codeListURL + "concept#>;");
-			writeLinetoFile("		skos:notation \"" + concept.getId() + "\";");
+			Resource con = model.createResource(ParserUtil.concepts + concept.getId());
+			model.add(con,ParserUtil.type,ParserUtil.sdmx);
+			model.add(con,ParserUtil.notation,concept.getId());
 			
 			//print multilingual labels
 			hshName = concept.gethshName();
@@ -625,44 +621,39 @@ public class dsdParser {
 				Map.Entry entry = (Map.Entry) entrySetIterator.next();
 	            String key = (String) entry.getKey();
 	            name = hshName.get(key);
-	            writeLinetoFile("		skos:prefLabel \"" + name + "\"@" + key + ";");
+	            //writeLinetoFile("		skos:prefLabel \"" + name + "\"@" + key + ";");
+	            model.add(con,ParserUtil.skosLabel,model.createLiteral(name,key));
 			}
-			writeLinetoFile("		.");
+			
+			Resource res = model.createResource(ParserUtil.concepts);
+			model.add(con,ParserUtil.skosScheme,res);
+			
 		}
+		
+		
+	
+		writeRDFToFile(fileName,model);
 	}
 	
-	public static void writeLinetoFile(String line)
-	{
-		
-	   	try{
-	       	
-	   		write.newLine();
-	       	write.write(line);
-	       	write.flush();
-	       }
-	       catch (Exception e){//Catch exception if any
-	       	      System.err.println("Error: " + e.getMessage());
-	       	}
-
-	}
-	public void createRDFFile(String fileName)
+	public void writeRDFToFile(String fileName, Model model)
 	{
 		try
 	   	{
-			fstream = new FileWriter(outputFilePath + fileName + ".rdf",false);
-			write = new BufferedWriter(fstream);
+			OutputStream output = new FileOutputStream(outputFilePath + fileName + ".rdf",false);
+			model.write(output,serialization);
 	   	}catch(Exception e)
 	   	{
-	   		System.out.println("Error while creating file ...");
+	   		System.out.println("Error while creating file ..." + e.getMessage());
 	   	}
-	}
-	
+	}	
 	public static void main(String[] args)
 	{
-		dsdParser obj = new dsdParser();
+		dsdParser_Jena obj = new dsdParser_Jena();
 		
 		xmlFilePath = args[0];
 		outputFilePath = args[1];
+		if(args.length > 2)
+			serialization = args[2];
 		
 		obj.initObjects();
 		obj.parseFile();

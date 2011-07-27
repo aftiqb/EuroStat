@@ -8,7 +8,7 @@ public class Attribute {
 	protected String codeList;
 	protected String attachmentLevel;
 	protected String assignmentStatus;
-	
+	protected String dataType;
 	
 	public Attribute()
 	{
@@ -17,15 +17,17 @@ public class Attribute {
 		this.codeList = null;
 		this.attachmentLevel = null;
 		this.assignmentStatus = null;
+		this.dataType = null;
 	}
 	
-	public Attribute(String conceptRef, String conceptSchemeRef, String codeList, String attachmentLevel, String assignmentStatus)
+	public Attribute(String conceptRef, String conceptSchemeRef, String codeList, String attachmentLevel, String assignmentStatus, String dataType)
 	{
 		this.conceptRef = conceptRef;
 		this.conceptSchemeRef = conceptSchemeRef;
 		this.codeList = codeList;
 		this.attachmentLevel = attachmentLevel;
 		this.assignmentStatus = assignmentStatus;
+		this.dataType = dataType;
 	}
 	
 	public String getConceptSchemeRef() {
@@ -68,5 +70,12 @@ public class Attribute {
 		this.assignmentStatus = assignmentStatus;
 	}
 	
+	public String getDataType() {
+		return dataType;
+	}
+	
+	public void setDataType(String dataType) {
+		this.dataType = dataType;
+	}
 		
 }
